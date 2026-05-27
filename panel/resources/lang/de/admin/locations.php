@@ -1,0 +1,45 @@
+<?php
+
+return [
+
+    'label' => 'Standort',
+    'plural-label' => 'Standorte',
+
+    'section' => [
+        'title' => 'Standort Details',
+        'description' => 'Definiere einen Standort zu dem Nodes hinzugefügt werden können.',
+    ],
+
+    'fields' => [
+        'short' => [
+            'label' => 'Kurzkennung',
+            'placeholder' => 'de.berlin.1',
+            'helper' => 'Ein Kurze Kennung für diesen Standort.',
+        ],
+
+        'long' => [
+            'label' => 'Beschreibung',
+            'placeholder' => 'Berlin, Deutschland',
+            'helper' => 'Eine längere Beschreibung dieses Standortes.',
+        ],
+    ],
+
+    'table' => [
+        'id' => 'ID',
+        'short' => 'Kurzkennung',
+        'long' => 'Beschreibung',
+        'nodes' => 'Nodes',
+        'servers' => 'Server',
+        'created' => 'Erstellt',
+    ],
+
+    'actions' => [
+        'edit' => 'Bearbeiten',
+        'delete' => 'Löschen',
+    ],
+
+    'messages' => [
+        'cannot_delete_with_nodes' => 'Sie können kein Standort mit Nodes löschen.',
+    ],
+
+];
