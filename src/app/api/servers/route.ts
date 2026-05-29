@@ -1,17 +1,17 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+
+import { getSession } from '@/lib/auth';
 import { db } from '@/lib/db';
 
 export async function GET() {
   try {
-    const session = await getServerSession(authOptions);
+    const session = await getSession();
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const servers = await db.server.findMany({
-      where: { ownerId: session.user.id },
+      where: { ownerId: session.id },
       include: { node: true },
       orderBy: { createdAt: 'desc' },
     });
@@ -25,7 +25,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const session = await getServerSession(authOptions);
+    const session = await getSession();
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -47,7 +47,7 @@ export async function POST(request: Request) {
         name,
         description: description || null,
         nodeId,
-        ownerId: session.user.id,
+        ownerId: session.id,
         category: category || null,
         egg: egg || null,
         memoryLimit: memoryLimit || 1024,

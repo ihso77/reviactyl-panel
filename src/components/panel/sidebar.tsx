@@ -3,7 +3,6 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuthStore } from '@/lib/store';
-import { signOut } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import {
   LayoutDashboard,
@@ -46,8 +45,16 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   };
 
   const handleLogout = async () => {
+    try {
+      await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'logout' }),
+      });
+    } catch {
+      // ignore
+    }
     storeLogout();
-    await signOut({ redirect: false });
     router.push('/login');
   };
 

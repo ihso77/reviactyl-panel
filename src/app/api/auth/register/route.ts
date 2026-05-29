@@ -1,66 +1,49 @@
-import { NextResponse } from 'next/server';
-import bcrypt from 'bcryptjs';
+import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import crypto from 'crypto';
+import { hashPassword } from '@/lib/auth';
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { name, email, username, password } = body;
+    const { name, email, username, password } = await request.json();
 
     if (!email || !username || !password) {
-      return NextResponse.json(
-        { error: 'Email, username, and password are required' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Email, username, and password are required' }, { status: 400 });
     }
 
-    if (password.length < 8) {
-      return NextResponse.json(
-        { error: 'Password must be at least 8 characters' },
-        { status: 400 }
-      );
-    }
-
-    const existingUser = await db.user.findFirst({
+    // Check if user already exists
+    const existing = await db.user.findFirst({
       where: {
         OR: [{ email }, { username }],
       },
     });
 
-    if (existingUser) {
-      return NextResponse.json(
-        { error: 'A user with this email or username already exists' },
-        { status: 409 }
-      );
+    if (existing) {
+      if (existing.email === email) {
+        return NextResponse.json({ error: 'Email already in use' }, { status: 409 });
+      }
+      return NextResponse.json({ error: 'Username already taken' }, { status: 409 });
     }
 
-    const hashedPassword = await bcrypt.hash(password, 12);
+    const hashedPassword = await hashPassword(password);
 
     const user = await db.user.create({
       data: {
         email,
         username,
-        name: name || null,
+        name: name || username,
         password: hashedPassword,
         isAdmin: false,
       },
     });
 
-    return NextResponse.json(
-      {
-        id: user.id,
-        email: user.email,
-        username: user.username,
-        name: user.name,
-      },
-      { status: 201 }
-    );
+    return NextResponse.json({
+      id: user.id,
+      email: user.email,
+      username: user.username,
+      name: user.name,
+    }, { status: 201 });
   } catch (error) {
-    console.error('Registration error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    console.error('Register error:', error);
+    return NextResponse.json({ error: 'Registration failed. Is the database connected?' }, { status: 500 });
   }
 }

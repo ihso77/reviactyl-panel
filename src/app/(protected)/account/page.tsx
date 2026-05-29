@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import { useAuthStore } from '@/lib/store';
 import { useRouter } from 'next/navigation';
-import { signOut } from 'next-auth/react';
 import type { ApiKey, SshKey } from '@/lib/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -143,8 +142,16 @@ export default function AccountPage() {
   };
 
   const handleLogout = async () => {
+    try {
+      await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'logout' }),
+      });
+    } catch {
+      // ignore
+    }
     storeLogout();
-    await signOut({ redirect: false });
     router.push('/login');
   };
 

@@ -19,22 +19,19 @@ export default function ProtectedLayout({
     if (hasChecked.current) return;
     hasChecked.current = true;
 
-    fetch('/api/auth/session')
-      .then((res) => {
-        if (!res.ok) throw new Error('Not authenticated');
-        return res.json();
-      })
-      .then((session) => {
-        if (session?.user) {
+    fetch('/api/auth/login')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.user) {
           const u: User = {
-            id: session.user.id,
-            email: session.user.email,
-            username: session.user.username,
-            name: session.user.name || session.user.username,
-            isAdmin: session.user.isAdmin,
-            createdAt: session.user.createdAt,
-            language: session.user.language,
-            twoFactorEnabled: session.user.twoFactorEnabled,
+            id: data.user.id,
+            email: data.user.email,
+            username: data.user.username,
+            name: data.user.name || data.user.username,
+            isAdmin: data.user.isAdmin,
+            createdAt: data.user.createdAt,
+            language: data.user.language,
+            twoFactorEnabled: data.user.twoFactorEnabled,
           };
           setUser(u);
         } else {

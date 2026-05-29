@@ -2,7 +2,6 @@
 
 import { useAuthStore } from '@/lib/store';
 import { useTheme } from 'next-themes';
-import { signOut } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { Sun, Moon, Bell, Menu } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -27,8 +26,16 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
   const router = useRouter();
 
   const handleLogout = async () => {
+    try {
+      await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'logout' }),
+      });
+    } catch {
+      // ignore errors
+    }
     storeLogout();
-    await signOut({ redirect: false });
     router.push('/login');
   };
 

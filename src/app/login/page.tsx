@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { signIn } from 'next-auth/react';
 import Link from 'next/link';
 import { AuthLayout } from '@/components/panel/auth-layout';
 import { Button } from '@/components/ui/button';
@@ -13,14 +12,15 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Eye, EyeOff, LogIn } from 'lucide-react';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
+import { useAuthStore } from '@/lib/store';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [remember, setRemember] = useState(false);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+  const { setUser } = useAuthStore();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -33,20 +33,34 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const result = await signIn('credentials', {
-        email,
-        password,
-        redirect: false,
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
       });
 
-      if (result?.error) {
-        toast.error('Invalid email or password');
-      } else {
+      const data = await res.json();
+
+      if (!res.ok) {
+        toast.error(data.error || 'Invalid email or password');
+      } else if (data.user) {
+        setUser({
+          id: data.user.id,
+          email: data.user.email,
+          username: data.user.username,
+          name: data.user.name || data.user.username,
+          isAdmin: data.user.isAdmin,
+          createdAt: data.user.createdAt,
+          language: data.user.language,
+          twoFactorEnabled: data.user.twoFactorEnabled,
+        });
         toast.success('Logged in successfully');
         router.push('/dashboard');
+      } else {
+        toast.error('Invalid email or password');
       }
     } catch {
-      toast.error('An error occurred during login');
+      toast.error('Connection error. Is the database configured?');
     } finally {
       setLoading(false);
     }
@@ -108,16 +122,6 @@ export default function LoginPage() {
                     {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                 </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <Checkbox
-                  id="remember"
-                  checked={remember}
-                  onCheckedChange={(checked) => setRemember(checked === true)}
-                />
-                <Label htmlFor="remember" className="text-sm font-normal text-muted-foreground">
-                  Remember me
-                </Label>
               </div>
               <Button type="submit" className="w-full h-11" disabled={loading}>
                 {loading ? (

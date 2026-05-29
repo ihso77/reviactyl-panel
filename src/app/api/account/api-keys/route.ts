@@ -1,18 +1,18 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+
+import { getSession } from '@/lib/auth';
 import { db } from '@/lib/db';
 import crypto from 'crypto';
 
 export async function GET() {
   try {
-    const session = await getServerSession(authOptions);
+    const session = await getSession();
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const keys = await db.apiKey.findMany({
-      where: { userId: session.user.id },
+      where: { userId: session.id },
       orderBy: { createdAt: 'desc' },
     });
 
@@ -25,7 +25,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const session = await getServerSession(authOptions);
+    const session = await getSession();
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -42,7 +42,7 @@ export async function POST(request: Request) {
         description: description || null,
         allowedIps: allowedIps || '*',
         token,
-        userId: session.user.id,
+        userId: session.id,
       },
     });
 

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+
+import { getSession } from '@/lib/auth';
 import { db } from '@/lib/db';
 
 export async function GET(
@@ -8,7 +8,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await getServerSession(authOptions);
+    const session = await getSession();
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -16,7 +16,7 @@ export async function GET(
     const { id } = await params;
 
     const server = await db.server.findFirst({
-      where: { id, ownerId: session.user.id },
+      where: { id, ownerId: session.id },
     });
     if (!server) {
       return NextResponse.json({ error: 'Server not found' }, { status: 404 });
@@ -25,7 +25,7 @@ export async function GET(
     // Return activity logs related to this server
     const activityLogs = await db.activityLog.findMany({
       where: {
-        userId: session.user.id,
+        userId: session.id,
         OR: [
           { action: { contains: 'server' } },
           { description: { contains: server.name } },

@@ -1,17 +1,17 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+
+import { getSession } from '@/lib/auth';
 import { db } from '@/lib/db';
 
 export async function GET() {
   try {
-    const session = await getServerSession(authOptions);
+    const session = await getSession();
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const user = await db.user.findUnique({
-      where: { id: session.user.id },
+      where: { id: session.id },
       select: {
         id: true,
         email: true,
@@ -40,7 +40,7 @@ export async function GET() {
 
 export async function PUT(request: Request) {
   try {
-    const session = await getServerSession(authOptions);
+    const session = await getSession();
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -49,14 +49,14 @@ export async function PUT(request: Request) {
     const { name, email, username, language } = body;
 
     // Check for uniqueness
-    if (email && email !== session.user.email) {
+    if (email && email !== session.email) {
       const existing = await db.user.findUnique({ where: { email } });
       if (existing) {
         return NextResponse.json({ error: 'Email already in use' }, { status: 409 });
       }
     }
 
-    if (username && username !== session.user.username) {
+    if (username && username !== session.username) {
       const existing = await db.user.findUnique({ where: { username } });
       if (existing) {
         return NextResponse.json({ error: 'Username already in use' }, { status: 409 });
@@ -64,7 +64,7 @@ export async function PUT(request: Request) {
     }
 
     const updated = await db.user.update({
-      where: { id: session.user.id },
+      where: { id: session.id },
       data: {
         ...(name !== undefined && { name }),
         ...(email && { email }),

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+
+import { getSession } from '@/lib/auth';
 import { db } from '@/lib/db';
 
 export async function DELETE(
@@ -8,7 +8,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await getServerSession(authOptions);
+    const session = await getSession();
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -16,7 +16,7 @@ export async function DELETE(
     const { id } = await params;
 
     const key = await db.sshKey.findFirst({
-      where: { id, userId: session.user.id },
+      where: { id, userId: session.id },
     });
 
     if (!key) {
