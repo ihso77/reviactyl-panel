@@ -35,11 +35,33 @@ export default function RegisterPage() {
       return;
     }
 
+    if (!email || !username) {
+      toast.error('Email and username are required');
+      return;
+    }
+
     setLoading(true);
-    await new Promise((r) => setTimeout(r, 1000));
-    toast.success('Account created successfully! Please sign in.');
-    router.push('/login');
-    setLoading(false);
+
+    try {
+      const res = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, email, username, password }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        toast.error(data.error || 'Registration failed');
+      } else {
+        toast.success('Account created successfully! Please sign in.');
+        router.push('/login');
+      }
+    } catch {
+      toast.error('An error occurred during registration');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -77,6 +99,7 @@ export default function RegisterPage() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="h-11"
+                  required
                 />
               </div>
               <div className="space-y-2">
@@ -87,6 +110,7 @@ export default function RegisterPage() {
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   className="h-11"
+                  required
                 />
                 <p className="text-xs text-muted-foreground">
                   Alphanumeric characters only. Must be 3-24 characters.
@@ -102,6 +126,7 @@ export default function RegisterPage() {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     className="h-11 pr-10"
+                    required
                   />
                   <button
                     type="button"
@@ -121,6 +146,7 @@ export default function RegisterPage() {
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   className="h-11"
+                  required
                 />
               </div>
               <Button type="submit" className="w-full h-11" disabled={loading}>

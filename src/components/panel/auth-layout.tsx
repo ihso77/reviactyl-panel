@@ -31,20 +31,6 @@ export function AuthLayout({ children }: AuthLayoutProps) {
             <p className="text-lg text-white/60 max-w-md">
               Powerful, modern, and intuitive panel for managing all your game servers in one place.
             </p>
-            <div className="flex gap-6">
-              <div>
-                <p className="text-2xl font-bold text-primary">156</p>
-                <p className="text-sm text-white/40">Active Servers</p>
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-primary">99.9%</p>
-                <p className="text-sm text-white/40">Uptime</p>
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-primary">1,247</p>
-                <p className="text-sm text-white/40">Users</p>
-              </div>
-            </div>
           </div>
           <p className="text-xs text-white/30">© 2024 Reviactyl. All rights reserved.</p>
         </div>
@@ -60,7 +46,7 @@ export function AuthLayout({ children }: AuthLayoutProps) {
             </div>
             <div>
               <h1 className="text-base font-bold">Reviactyl</h1>
-              <p className="text-[10px] text-muted-foreground">v26 Panel</p>
+              <p className="text-[10px] text-muted-foreground">Game Server Panel</p>
             </div>
           </div>
           {children}

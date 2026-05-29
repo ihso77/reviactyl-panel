@@ -7,7 +7,19 @@ export default function HomePage() {
   const router = useRouter();
 
   useEffect(() => {
-    router.replace('/dashboard');
+    // Check if setup is needed, then redirect
+    fetch('/api/setup')
+      .then(r => r.json())
+      .then(data => {
+        if (data.setupRequired) {
+          router.replace('/setup');
+        } else {
+          router.replace('/login');
+        }
+      })
+      .catch(() => {
+        router.replace('/login');
+      });
   }, [router]);
 
   return (

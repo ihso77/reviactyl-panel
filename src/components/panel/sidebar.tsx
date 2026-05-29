@@ -3,6 +3,8 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuthStore } from '@/lib/store';
+import { signOut } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
 import {
   LayoutDashboard,
   Server,
@@ -35,11 +37,18 @@ const adminNav = [
 
 export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const pathname = usePathname();
-  const { logout } = useAuthStore();
+  const { user, logout: storeLogout } = useAuthStore();
+  const router = useRouter();
 
   const isActive = (href: string) => {
     if (href === '/dashboard') return pathname === '/dashboard';
     return pathname.startsWith(href);
+  };
+
+  const handleLogout = async () => {
+    storeLogout();
+    await signOut({ redirect: false });
+    router.push('/login');
   };
 
   const navItem = (item: { href: string; label: string; icon: React.ElementType }) => {
@@ -93,7 +102,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
         {!collapsed && (
           <div className="flex flex-col">
             <span className="text-sm font-bold text-sidebar-foreground">Reviactyl</span>
-            <span className="text-[10px] font-medium text-sidebar-foreground/50">v26 Panel</span>
+            <span className="text-[10px] font-medium text-sidebar-foreground/50">Game Panel</span>
           </div>
         )}
       </div>
@@ -107,14 +116,17 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
         )}
         {mainNav.map((item) => navItem(item))}
 
-        <Separator className="my-3 bg-sidebar-border" />
-
-        {!collapsed && (
-          <p className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/40">
-            Administration
-          </p>
+        {user?.isAdmin && (
+          <>
+            <Separator className="my-3 bg-sidebar-border" />
+            {!collapsed && (
+              <p className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/40">
+                Administration
+              </p>
+            )}
+            {adminNav.map((item) => navItem(item))}
+          </>
         )}
-        {adminNav.map((item) => navItem(item))}
       </nav>
 
       {/* Footer */}
@@ -123,12 +135,12 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
           <TooltipProvider delayDuration={0}>
             <Tooltip>
               <TooltipTrigger asChild>
-                <Link
-                  href="/login"
+                <button
+                  onClick={handleLogout}
                   className="flex h-10 w-full items-center justify-center rounded-lg text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent hover:text-destructive"
                 >
                   <LogOut className="h-5 w-5" />
-                </Link>
+                </button>
               </TooltipTrigger>
               <TooltipContent side="right" className="font-sans">Logout</TooltipContent>
             </Tooltip>
@@ -137,12 +149,10 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
           <Button
             variant="ghost"
             className="w-full justify-start gap-3 text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-destructive"
-            asChild
+            onClick={handleLogout}
           >
-            <Link href="/login">
-              <LogOut className="h-5 w-5" />
-              Logout
-            </Link>
+            <LogOut className="h-5 w-5" />
+            Logout
           </Button>
         )}
       </div>

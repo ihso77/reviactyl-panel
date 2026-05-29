@@ -1,6 +1,8 @@
 'use client';
 
-import { adminStats, activityLogs, nodeStats, servers } from '@/lib/mock-data';
+import { useState, useEffect } from 'react';
+import { useAuthStore } from '@/lib/store';
+import type { NodeStats, ActivityLog } from '@/lib/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -35,50 +37,14 @@ const item = {
   show: { opacity: 1, y: 0 },
 };
 
-const statCards = [
-  {
-    label: 'Total Users',
-    value: adminStats.totalUsers.toLocaleString(),
-    icon: Users,
-    color: 'text-primary',
-    bgColor: 'bg-primary/10',
-  },
-  {
-    label: 'Total Servers',
-    value: adminStats.totalServers.toString(),
-    icon: Server,
-    color: 'text-success',
-    bgColor: 'bg-success/10',
-  },
-  {
-    label: 'Total Nodes',
-    value: adminStats.totalNodes.toString(),
-    icon: Globe,
-    color: 'text-chart-2',
-    bgColor: 'bg-chart-2/10',
-  },
-  {
-    label: 'Databases',
-    value: adminStats.totalDatabases.toString(),
-    icon: Database,
-    color: 'text-chart-3',
-    bgColor: 'bg-chart-3/10',
-  },
-  {
-    label: 'Active Servers',
-    value: adminStats.activeServers.toString(),
-    icon: Activity,
-    color: 'text-chart-4',
-    bgColor: 'bg-chart-4/10',
-  },
-  {
-    label: 'Suspended',
-    value: adminStats.suspendedServers.toString(),
-    icon: ShieldAlert,
-    color: 'text-destructive',
-    bgColor: 'bg-destructive/10',
-  },
-];
+interface AdminStats {
+  totalUsers: number;
+  totalServers: number;
+  totalNodes: number;
+  totalDatabases: number;
+  activeServers: number;
+  suspendedServers: number;
+}
 
 const actionIcons = [
   { label: 'New User', icon: UserPlus, href: '#' },
@@ -89,6 +55,74 @@ const actionIcons = [
 ];
 
 export default function AdminPage() {
+  const { user } = useAuthStore();
+  const [stats, setStats] = useState<AdminStats | null>(null);
+  const [nodes, setNodes] = useState<NodeStats[]>([]);
+  const [activity, setActivity] = useState<ActivityLog[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!user?.isAdmin) return;
+
+    Promise.all([
+      fetch('/api/admin/stats').then(r => r.ok ? r.json() : null),
+      fetch('/api/nodes').then(r => r.ok ? r.json() : []),
+      fetch('/api/admin/activity').then(r => r.ok ? r.json() : []),
+    ])
+      .then(([statsData, nodesData, activityData]) => {
+        setStats(statsData);
+        setNodes(nodesData.map((n: any) => ({
+          id: n.id,
+          name: n.name,
+          location: n.location,
+          cpu: n.cpu,
+          memory: n.memory,
+          disk: n.disk,
+          servers: n._count?.servers || 0,
+          status: n.status,
+        })));
+        setActivity(activityData.map((a: any) => ({
+          id: a.id,
+          action: a.action,
+          description: a.description,
+          user: a.user?.username || 'Unknown',
+          timestamp: new Date(a.createdAt).toLocaleString(),
+          ip: a.ip || '',
+        })));
+        setLoading(false);
+      })
+      .catch(() => setLoading(false));
+  }, [user?.isAdmin]);
+
+  if (!user?.isAdmin) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24 text-center">
+        <ShieldAlert className="h-12 w-12 text-muted-foreground/30 mb-4" />
+        <h3 className="text-lg font-medium">Access Denied</h3>
+        <p className="text-sm text-muted-foreground">You do not have admin access.</p>
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-24">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+      </div>
+    );
+  }
+
+  const s = stats || { totalUsers: 0, totalServers: 0, totalNodes: 0, totalDatabases: 0, activeServers: 0, suspendedServers: 0 };
+
+  const statCards = [
+    { label: 'Total Users', value: s.totalUsers.toString(), icon: Users, color: 'text-primary', bgColor: 'bg-primary/10' },
+    { label: 'Total Servers', value: s.totalServers.toString(), icon: Server, color: 'text-success', bgColor: 'bg-success/10' },
+    { label: 'Total Nodes', value: s.totalNodes.toString(), icon: Globe, color: 'text-chart-2', bgColor: 'bg-chart-2/10' },
+    { label: 'Databases', value: s.totalDatabases.toString(), icon: Database, color: 'text-chart-3', bgColor: 'bg-chart-3/10' },
+    { label: 'Active Servers', value: s.activeServers.toString(), icon: Activity, color: 'text-chart-4', bgColor: 'bg-chart-4/10' },
+    { label: 'Suspended', value: s.suspendedServers.toString(), icon: ShieldAlert, color: 'text-destructive', bgColor: 'bg-destructive/10' },
+  ];
+
   return (
     <motion.div variants={container} initial="hidden" animate="show" className="space-y-6">
       <motion.div variants={item}>
@@ -135,56 +169,62 @@ export default function AdminPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              {nodeStats.map((node) => (
-                <div key={node.id} className="rounded-lg border border-border/50 p-4 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <Circle
-                        className={`h-2.5 w-2.5 fill-current ${
-                          node.status === 'online' ? 'text-success' : 'text-destructive'
-                        }`}
-                      />
-                      <div>
-                        <p className="text-sm font-medium">{node.name}</p>
-                        <p className="text-xs text-muted-foreground">{node.location}</p>
+              {nodes.length > 0 ? (
+                nodes.map((node) => (
+                  <div key={node.id} className="rounded-lg border border-border/50 p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <Circle
+                          className={`h-2.5 w-2.5 fill-current ${
+                            node.status === 'online' ? 'text-success' : 'text-destructive'
+                          }`}
+                        />
+                        <div>
+                          <p className="text-sm font-medium">{node.name}</p>
+                          <p className="text-xs text-muted-foreground">{node.location}</p>
+                        </div>
+                      </div>
+                      <Badge
+                        variant={node.status === 'online' ? 'default' : 'secondary'}
+                        className={
+                          node.status === 'online'
+                            ? 'bg-success/10 text-success border-0 text-xs'
+                            : 'bg-destructive/10 text-destructive border-0 text-xs'
+                        }
+                      >
+                        {node.status}
+                      </Badge>
+                    </div>
+                    <div className="grid grid-cols-3 gap-3">
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-muted-foreground">CPU</span>
+                          <span className="font-medium">{node.cpu}%</span>
+                        </div>
+                        <Progress value={node.cpu} className="h-1.5" />
+                      </div>
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-muted-foreground">Memory</span>
+                          <span className="font-medium">{node.memory}%</span>
+                        </div>
+                        <Progress value={node.memory} className="h-1.5" />
+                      </div>
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-muted-foreground">Disk</span>
+                          <span className="font-medium">{node.disk}%</span>
+                        </div>
+                        <Progress value={node.disk} className="h-1.5" />
                       </div>
                     </div>
-                    <Badge
-                      variant={node.status === 'online' ? 'default' : 'secondary'}
-                      className={
-                        node.status === 'online'
-                          ? 'bg-success/10 text-success border-0 text-xs'
-                          : 'bg-destructive/10 text-destructive border-0 text-xs'
-                      }
-                    >
-                      {node.status}
-                    </Badge>
                   </div>
-                  <div className="grid grid-cols-3 gap-3">
-                    <div className="space-y-1">
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-muted-foreground">CPU</span>
-                        <span className="font-medium">{node.cpu}%</span>
-                      </div>
-                      <Progress value={node.cpu} className="h-1.5" />
-                    </div>
-                    <div className="space-y-1">
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-muted-foreground">Memory</span>
-                        <span className="font-medium">{node.memory}%</span>
-                      </div>
-                      <Progress value={node.memory} className="h-1.5" />
-                    </div>
-                    <div className="space-y-1">
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-muted-foreground">Disk</span>
-                        <span className="font-medium">{node.disk}%</span>
-                      </div>
-                      <Progress value={node.disk} className="h-1.5" />
-                    </div>
-                  </div>
+                ))
+              ) : (
+                <div className="flex items-center justify-center py-8 text-muted-foreground text-sm">
+                  No nodes configured yet
                 </div>
-              ))}
+              )}
             </CardContent>
           </Card>
         </motion.div>
@@ -218,62 +258,6 @@ export default function AdminPage() {
         </motion.div>
       </div>
 
-      {/* Allocation Stats */}
-      <motion.div variants={item}>
-        <Card className="border-border/50">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2">
-              <HardDrive className="h-4 w-4 text-primary" />
-              Allocation Usage
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              <div className="space-y-2 rounded-lg border border-border/50 p-4">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">Total Allocations</span>
-                  <span className="font-bold text-lg">{adminStats.totalAllocations}</span>
-                </div>
-                <Progress value={(adminStats.usedAllocations / adminStats.totalAllocations) * 100} className="h-2" />
-                <p className="text-xs text-muted-foreground">
-                  {adminStats.usedAllocations} used ({((adminStats.usedAllocations / adminStats.totalAllocations) * 100).toFixed(1)}%)
-                </p>
-              </div>
-              <div className="space-y-2 rounded-lg border border-border/50 p-4">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">Active Servers</span>
-                  <span className="font-bold text-lg text-success">{adminStats.activeServers}</span>
-                </div>
-                <Progress value={(adminStats.activeServers / adminStats.totalServers) * 100} className="h-2" />
-                <p className="text-xs text-muted-foreground">
-                  {adminStats.totalServers - adminStats.activeServers} inactive
-                </p>
-              </div>
-              <div className="space-y-2 rounded-lg border border-border/50 p-4">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">Suspended</span>
-                  <span className="font-bold text-lg text-destructive">{adminStats.suspendedServers}</span>
-                </div>
-                <Progress value={(adminStats.suspendedServers / adminStats.totalServers) * 100} className="h-2" />
-                <p className="text-xs text-muted-foreground">
-                  {(adminStats.suspendedServers / adminStats.totalServers * 100).toFixed(1)}% of total
-                </p>
-              </div>
-              <div className="space-y-2 rounded-lg border border-border/50 p-4">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">Databases</span>
-                  <span className="font-bold text-lg">{adminStats.totalDatabases}</span>
-                </div>
-                <Progress value={Math.min(100, (adminStats.totalDatabases / 500) * 100)} className="h-2" />
-                <p className="text-xs text-muted-foreground">
-                  {adminStats.totalDatabases} / 500 limit
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </motion.div>
-
       {/* Activity Log */}
       <motion.div variants={item}>
         <Card className="border-border/50">
@@ -285,30 +269,36 @@ export default function AdminPage() {
             <CardDescription>Latest actions across the panel.</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-1">
-              {activityLogs.map((log, i) => (
-                <div key={log.id}>
-                  <div className="flex items-center justify-between rounded-lg px-3 py-3 hover:bg-muted/50 transition-colors">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-bold">
-                        {log.user.charAt(0).toUpperCase()}
+            {activity.length > 0 ? (
+              <div className="space-y-1">
+                {activity.map((log, i) => (
+                  <div key={log.id}>
+                    <div className="flex items-center justify-between rounded-lg px-3 py-3 hover:bg-muted/50 transition-colors">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-bold">
+                          {log.user.charAt(0).toUpperCase()}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-sm truncate">{log.description}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {log.user} {log.ip ? `• ${log.ip}` : ''}
+                          </p>
+                        </div>
                       </div>
-                      <div className="min-w-0">
-                        <p className="text-sm truncate">{log.description}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {log.user} • {log.ip}
-                        </p>
+                      <div className="flex items-center gap-2 shrink-0 ml-4">
+                        <Badge variant="outline" className="text-[10px] hidden sm:inline-flex">{log.action}</Badge>
+                        <span className="text-xs text-muted-foreground whitespace-nowrap">{log.timestamp}</span>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2 shrink-0 ml-4">
-                      <Badge variant="outline" className="text-[10px] hidden sm:inline-flex">{log.action}</Badge>
-                      <span className="text-xs text-muted-foreground whitespace-nowrap">{log.timestamp}</span>
-                    </div>
+                    {i < activity.length - 1 && <Separator />}
                   </div>
-                  {i < activityLogs.length - 1 && <Separator />}
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            ) : (
+              <div className="flex items-center justify-center py-8 text-muted-foreground text-sm">
+                No activity recorded yet.
+              </div>
+            )}
           </CardContent>
         </Card>
       </motion.div>

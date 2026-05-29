@@ -1,17 +1,25 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
-const protectedPaths = ['/dashboard', '/server', '/account', '/admin'];
-
 export function middleware(request: NextRequest) {
-  // Auth paths should redirect to dashboard if already logged in
-  // Since auth is client-side with Zustand, we don't block server-side
-  // The client-side layout handles redirects
+  const { pathname } = request.nextUrl;
+
+  // Let API routes and static files pass through
+  if (pathname.startsWith('/api') || pathname.startsWith('/_next') || pathname.startsWith('/public')) {
+    return NextResponse.next();
+  }
+
+  // Allow auth pages
+  if (pathname === '/login' || pathname === '/register' || pathname === '/setup') {
+    return NextResponse.next();
+  }
+
+  // For all other routes, let the client handle auth via the protected layout
   return NextResponse.next();
 }
 
 export const config = {
   matcher: [
-    '/((?!api|_next/static|_next/image|favicon.ico|robots.txt|public).*)',
+    '/((?!_next/static|_next/image|favicon.ico|robots.txt|logo.svg).*)',
   ],
 };

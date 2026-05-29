@@ -2,6 +2,8 @@
 
 import { useAuthStore } from '@/lib/store';
 import { useTheme } from 'next-themes';
+import { signOut } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
 import { Sun, Moon, Bell, Menu } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -13,15 +15,22 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Badge } from '@/components/ui/badge';
+import Link from 'next/link';
 
 interface HeaderProps {
   onMobileMenuToggle: () => void;
 }
 
 export function Header({ onMobileMenuToggle }: HeaderProps) {
-  const { user } = useAuthStore();
+  const { user, logout: storeLogout } = useAuthStore();
   const { setTheme, theme } = useTheme();
+  const router = useRouter();
+
+  const handleLogout = async () => {
+    storeLogout();
+    await signOut({ redirect: false });
+    router.push('/login');
+  };
 
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-border bg-background/80 px-4 backdrop-blur-md md:px-6">
@@ -54,26 +63,14 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon" className="relative h-9 w-9">
               <Bell className="h-4 w-4" />
-              <Badge className="absolute -right-1 -top-1 h-4 w-4 p-0 text-[10px] flex items-center justify-center bg-primary text-primary-foreground">
-                3
-              </Badge>
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-72">
             <DropdownMenuLabel>Notifications</DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem className="flex flex-col items-start gap-1 py-3">
-              <span className="text-sm font-medium">Server "Survival SMP" is running low on memory</span>
-              <span className="text-xs text-muted-foreground">2 minutes ago</span>
-            </DropdownMenuItem>
-            <DropdownMenuItem className="flex flex-col items-start gap-1 py-3">
-              <span className="text-sm font-medium">Backup completed successfully</span>
-              <span className="text-xs text-muted-foreground">1 hour ago</span>
-            </DropdownMenuItem>
-            <DropdownMenuItem className="flex flex-col items-start gap-1 py-3">
-              <span className="text-sm font-medium">New version available: v26.1</span>
-              <span className="text-xs text-muted-foreground">3 hours ago</span>
-            </DropdownMenuItem>
+            <div className="px-2 py-4 text-center text-sm text-muted-foreground">
+              No new notifications
+            </div>
           </DropdownMenuContent>
         </DropdownMenu>
 
@@ -98,14 +95,16 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuItem asChild>
-              <a href="/account">Account Settings</a>
+              <Link href="/account">Account Settings</Link>
             </DropdownMenuItem>
-            <DropdownMenuItem asChild>
-              <a href="/admin">Admin Panel</a>
-            </DropdownMenuItem>
+            {user?.isAdmin && (
+              <DropdownMenuItem asChild>
+                <Link href="/admin">Admin Panel</Link>
+              </DropdownMenuItem>
+            )}
             <DropdownMenuSeparator />
-            <DropdownMenuItem asChild className="text-destructive focus:text-destructive">
-              <a href="/login">Log out</a>
+            <DropdownMenuItem onClick={handleLogout} className="text-destructive focus:text-destructive">
+              Log out
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

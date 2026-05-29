@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams } from 'next/navigation';
-import { servers, consoleLines, databases, backups, schedules } from '@/lib/mock-data';
+import type { Server, Database, Backup, Schedule, ConsoleLine } from '@/lib/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -35,76 +35,129 @@ import {
   FileText,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 
 export default function ServerPage() {
   const params = useParams();
-  const server = servers.find((s) => s.id === params.id) || servers[0];
+  const serverId = params.id as string;
+  const [server, setServer] = useState<Server | null>(null);
+  const [databases, setDatabases] = useState<Database[]>([]);
+  const [backups, setBackups] = useState<Backup[]>([]);
+  const [schedules, setSchedules] = useState<Schedule[]>([]);
+  const [consoleLines, setConsoleLines] = useState<ConsoleLine[]>([]);
   const [commandInput, setCommandInput] = useState('');
-  const [lines, setLines] = useState(consoleLines);
   const [activeTab, setActiveTab] = useState('console');
   const consoleEndRef = useRef<HTMLDivElement>(null);
-  const [stats, setStats] = useState({
-    cpu: server.cpu,
-    memory: server.memory,
-  });
+  const [loading, setLoading] = useState(true);
 
-  // Simulate stats fluctuation
   useEffect(() => {
-    if (server.status !== 'online') return;
-    const interval = setInterval(() => {
-      setStats((prev) => ({
-        cpu: Math.max(0, Math.min(100, prev.cpu + (Math.random() - 0.5) * 8)),
-        memory: Math.max(0, Math.min(server.memoryLimit, prev.memory + (Math.random() - 0.5) * 200)),
-      }));
-    }, 2000);
-    return () => clearInterval(interval);
-  }, [server.status, server.memoryLimit]);
+    if (!serverId) return;
+
+    Promise.all([
+      fetch(`/api/servers/${serverId}`).then(r => r.ok ? r.json() : null),
+      fetch(`/api/servers/${serverId}/databases`).then(r => r.ok ? r.json() : []),
+      fetch(`/api/servers/${serverId}/backups`).then(r => r.ok ? r.json() : []),
+      fetch(`/api/servers/${serverId}/schedules`).then(r => r.ok ? r.json() : []),
+      fetch(`/api/servers/${serverId}/console`).then(r => r.ok ? r.json() : []),
+    ])
+      .then(([serverData, databasesData, backupsData, schedulesData, consoleData]) => {
+        if (serverData) {
+          setServer({
+            id: serverData.id,
+            name: serverData.name,
+            description: serverData.description || '',
+            status: serverData.status,
+            node: serverData.node?.name || '',
+            category: serverData.category || '',
+            egg: serverData.egg || '',
+            cpu: serverData.cpu,
+            memory: serverData.memory,
+            memoryLimit: serverData.memoryLimit,
+            disk: serverData.disk,
+            diskLimit: serverData.diskLimit,
+            networkIn: serverData.networkIn,
+            networkOut: serverData.networkOut,
+            players: serverData.players,
+            maxPlayers: serverData.maxPlayers,
+            ip: serverData.ip || '',
+            port: serverData.port,
+          });
+        }
+        setDatabases(databasesData.map((d: any) => ({
+          id: d.id,
+          name: d.name,
+          host: d.host,
+          port: d.port,
+          username: d.username,
+          connections: d.connections,
+        })));
+        setBackups(backupsData.map((b: any) => ({
+          id: b.id,
+          name: b.name,
+          size: b.size || '—',
+          createdAt: b.createdAt,
+          status: b.status,
+        })));
+        setSchedules(schedulesData.map((s: any) => ({
+          id: s.id,
+          name: s.name,
+          cron: s.cron,
+          lastRun: s.lastRun || '—',
+          nextRun: s.nextRun || '—',
+          isActive: s.isActive,
+        })));
+        setConsoleLines(consoleData);
+        setLoading(false);
+      })
+      .catch(() => setLoading(false));
+  }, [serverId]);
 
   // Auto-scroll console
   useEffect(() => {
     consoleEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [lines]);
+  }, [consoleLines]);
 
   const handleSendCommand = () => {
     if (!commandInput.trim()) return;
-    const newLine = {
-      id: lines.length + 1,
+    const newLine: ConsoleLine = {
+      id: consoleLines.length + 1,
       timestamp: new Date().toLocaleTimeString('en-US', { hour12: false }),
       content: `> ${commandInput}`,
-      type: 'command' as const,
+      type: 'command',
     };
-    setLines((prev) => [...prev, newLine]);
-
-    // Simulate response
-    setTimeout(() => {
-      const responses = [
-        { content: `[INFO] Command executed successfully.`, type: 'info' as const },
-        { content: `[WARN] Unknown command. Type "help" for available commands.`, type: 'warn' as const },
-        { content: `Command output: OK`, type: 'success' as const },
-      ];
-      const response = responses[Math.floor(Math.random() * responses.length)];
-      setLines((prev) => [
-        ...prev,
-        {
-          id: prev.length + 1,
-          timestamp: new Date().toLocaleTimeString('en-US', { hour12: false }),
-          ...response,
-        },
-      ]);
-    }, 300 + Math.random() * 500);
-
+    setConsoleLines((prev) => [...prev, newLine]);
     setCommandInput('');
+    toast.info('Command sent to server');
   };
 
-  const handlePowerAction = (action: string) => {
+  const handlePowerAction = async (action: string) => {
+    const statusMap: Record<string, string> = {
+      start: 'online',
+      stop: 'offline',
+      restart: 'starting',
+      kill: 'offline',
+    };
     const labels: Record<string, string> = {
       start: 'Starting',
       stop: 'Stopping',
       restart: 'Restarting',
       kill: 'Force killing',
     };
-    toast.success(`${labels[action]} server "${server.name}"...`);
+
+    try {
+      const res = await fetch(`/api/servers/${serverId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: statusMap[action] }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setServer(prev => prev ? { ...prev, status: data.status } : null);
+        toast.success(`${labels[action]} server "${server?.name}"...`);
+      }
+    } catch {
+      toast.error('Failed to update server status');
+    }
   };
 
   const getLineClass = (type: string) => {
@@ -116,6 +169,24 @@ export default function ServerPage() {
       default: return 'text-muted-foreground';
     }
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-24">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+      </div>
+    );
+  }
+
+  if (!server) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24 text-center">
+        <Power className="h-12 w-12 text-muted-foreground/30 mb-4" />
+        <h3 className="text-lg font-medium">Server not found</h3>
+        <p className="text-sm text-muted-foreground">This server does not exist or you do not have access.</p>
+      </div>
+    );
+  }
 
   return (
     <motion.div
@@ -161,9 +232,9 @@ export default function ServerPage() {
       {/* Resource Stats */}
       <div className="grid gap-3 grid-cols-2 lg:grid-cols-5">
         {[
-          { label: 'CPU', value: `${stats.cpu.toFixed(1)}%`, icon: Cpu, percent: stats.cpu, color: stats.cpu > 80 ? 'text-destructive' : stats.cpu > 60 ? 'text-warning' : 'text-success' },
-          { label: 'Memory', value: `${(stats.memory / 1024).toFixed(1)} / ${(server.memoryLimit / 1024).toFixed(0)} GB`, icon: MemoryStick, percent: (stats.memory / server.memoryLimit) * 100, color: 'text-chart-2' },
-          { label: 'Disk', value: `${(server.disk / 1024).toFixed(1)} / ${(server.diskLimit / 1024).toFixed(0)} GB`, icon: HardDrive, percent: (server.disk / server.diskLimit) * 100, color: 'text-chart-3' },
+          { label: 'CPU', value: `${server.cpu.toFixed(1)}%`, icon: Cpu, percent: server.cpu, color: server.cpu > 80 ? 'text-destructive' : server.cpu > 60 ? 'text-warning' : 'text-success' },
+          { label: 'Memory', value: `${(server.memory / 1024).toFixed(1)} / ${(server.memoryLimit / 1024).toFixed(0)} GB`, icon: MemoryStick, percent: server.memoryLimit > 0 ? (server.memory / server.memoryLimit) * 100 : 0, color: 'text-chart-2' },
+          { label: 'Disk', value: `${(server.disk / 1024).toFixed(1)} / ${(server.diskLimit / 1024).toFixed(0)} GB`, icon: HardDrive, percent: server.diskLimit > 0 ? (server.disk / server.diskLimit) * 100 : 0, color: 'text-chart-3' },
           { label: 'Network In', value: `${server.networkIn} MB/s`, icon: Network, percent: (server.networkIn / 20) * 100, color: 'text-chart-4' },
           { label: 'Network Out', value: `${server.networkOut} MB/s`, icon: Network, percent: (server.networkOut / 20) * 100, color: 'text-chart-5' },
         ].map((stat) => (
@@ -210,19 +281,23 @@ export default function ServerPage() {
         <TabsContent value="console" className="space-y-3">
           <Card className="border-border/50 overflow-hidden">
             <CardContent className="p-0">
-              {/* Console Output */}
               <ScrollArea className="h-[400px] bg-[#0d1117] console-output">
                 <div className="p-4 space-y-0.5 text-[13px] leading-relaxed">
-                  {lines.map((line) => (
-                    <div key={line.id} className={getLineClass(line.type)}>
-                      <span className="text-muted-foreground/50 mr-2 select-none">[{line.timestamp}]</span>
-                      {line.content}
+                  {consoleLines.length > 0 ? (
+                    consoleLines.map((line) => (
+                      <div key={line.id} className={getLineClass(line.type)}>
+                        <span className="text-muted-foreground/50 mr-2 select-none">[{line.timestamp}]</span>
+                        {line.content}
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-muted-foreground/50 py-8 text-center">
+                      No console output yet. Start the server to see logs.
                     </div>
-                  ))}
+                  )}
                   <div ref={consoleEndRef} />
                 </div>
               </ScrollArea>
-              {/* Command Input */}
               <div className="flex items-center gap-2 border-t border-border/50 bg-card p-3">
                 <span className="text-xs text-muted-foreground font-mono">$</span>
                 <Input
@@ -258,31 +333,8 @@ export default function ServerPage() {
               <CardDescription className="text-xs">/home/container/</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="space-y-1">
-                {[
-                  { name: 'server.properties', type: 'file', size: '1.2 KB', modified: '2024-01-16 14:32' },
-                  { name: 'world/', type: 'folder', size: '12.4 GB', modified: '2024-01-16 14:45' },
-                  { name: 'plugins/', type: 'folder', size: '340 MB', modified: '2024-01-15 09:00' },
-                  { name: 'logs/', type: 'folder', size: '56 MB', modified: '2024-01-16 14:50' },
-                  { name: 'spigot.jar', type: 'file', size: '52.1 MB', modified: '2024-01-10 12:00' },
-                  { name: 'eula.txt', type: 'file', size: '0.3 KB', modified: '2024-01-01 10:00' },
-                  { name: 'start.sh', type: 'file', size: '0.8 KB', modified: '2024-01-01 10:05' },
-                ].map((file) => (
-                  <div key={file.name} className="flex items-center justify-between rounded-lg px-3 py-2 hover:bg-muted/50 transition-colors cursor-pointer group">
-                    <div className="flex items-center gap-3">
-                      {file.type === 'folder' ? (
-                        <FolderOpen className="h-4 w-4 text-chart-3" />
-                      ) : (
-                        <FileText className="h-4 w-4 text-muted-foreground" />
-                      )}
-                      <span className="text-sm">{file.name}</span>
-                    </div>
-                    <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                      <span>{file.size}</span>
-                      <span>{file.modified}</span>
-                    </div>
-                  </div>
-                ))}
+              <div className="flex items-center justify-center py-12 text-muted-foreground text-sm">
+                Connect a node to manage server files.
               </div>
             </CardContent>
           </Card>
@@ -294,34 +346,37 @@ export default function ServerPage() {
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-base">Databases</CardTitle>
-                <Button size="sm" className="gap-1.5">
-                  <Plus className="h-3.5 w-3.5" /> New Database
-                </Button>
               </div>
             </CardHeader>
             <CardContent>
-              <div className="space-y-2">
-                {databases.map((db) => (
-                  <div key={db.id} className="flex items-center justify-between rounded-lg border border-border/50 p-4">
-                    <div className="space-y-1">
-                      <p className="text-sm font-medium">{db.name}</p>
-                      <p className="text-xs text-muted-foreground font-mono">{db.username}@{db.host}:{db.port}</p>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <div className="text-right">
-                        <p className="text-xs text-muted-foreground">Connections</p>
-                        <p className="text-sm font-medium">{db.connections}</p>
+              {databases.length > 0 ? (
+                <div className="space-y-2">
+                  {databases.map((db) => (
+                    <div key={db.id} className="flex items-center justify-between rounded-lg border border-border/50 p-4">
+                      <div className="space-y-1">
+                        <p className="text-sm font-medium">{db.name}</p>
+                        <p className="text-xs text-muted-foreground font-mono">{db.username}@{db.host}:{db.port}</p>
                       </div>
-                      <Button size="sm" variant="outline" className="text-xs">
-                        Reset Password
-                      </Button>
-                      <Button size="sm" variant="outline" className="text-xs text-destructive hover:bg-destructive/10">
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
+                      <div className="flex items-center gap-3">
+                        <div className="text-right">
+                          <p className="text-xs text-muted-foreground">Connections</p>
+                          <p className="text-sm font-medium">{db.connections}</p>
+                        </div>
+                        <Button size="sm" variant="outline" className="text-xs">
+                          Reset Password
+                        </Button>
+                        <Button size="sm" variant="outline" className="text-xs text-destructive hover:bg-destructive/10">
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="flex items-center justify-center py-8 text-muted-foreground text-sm">
+                  No databases configured.
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -332,46 +387,49 @@ export default function ServerPage() {
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-base">Backups</CardTitle>
-                <Button size="sm" className="gap-1.5">
-                  <Plus className="h-3.5 w-3.5" /> Create Backup
-                </Button>
               </div>
             </CardHeader>
             <CardContent>
-              <div className="space-y-2">
-                {backups.map((backup) => (
-                  <div key={backup.id} className="flex items-center justify-between rounded-lg border border-border/50 p-4">
-                    <div className="flex items-center gap-3">
-                      <FileText className="h-5 w-5 text-muted-foreground" />
-                      <div className="space-y-0.5">
-                        <p className="text-sm font-medium">{backup.name}</p>
-                        <p className="text-xs text-muted-foreground">{backup.createdAt}</p>
+              {backups.length > 0 ? (
+                <div className="space-y-2">
+                  {backups.map((backup) => (
+                    <div key={backup.id} className="flex items-center justify-between rounded-lg border border-border/50 p-4">
+                      <div className="flex items-center gap-3">
+                        <FileText className="h-5 w-5 text-muted-foreground" />
+                        <div className="space-y-0.5">
+                          <p className="text-sm font-medium">{backup.name}</p>
+                          <p className="text-xs text-muted-foreground">{new Date(backup.createdAt).toLocaleString()}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <Badge
+                          variant={backup.status === 'completed' ? 'default' : 'secondary'}
+                          className={
+                            backup.status === 'completed'
+                              ? 'bg-success/10 text-success border-0'
+                              : backup.status === 'in_progress'
+                              ? 'bg-warning/10 text-warning border-0'
+                              : 'bg-destructive/10 text-destructive border-0'
+                          }
+                        >
+                          {backup.status}
+                        </Badge>
+                        <span className="text-xs text-muted-foreground">{backup.size}</span>
+                        <Button size="sm" variant="outline" className="text-xs gap-1">
+                          <Download className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button size="sm" variant="outline" className="text-xs">
+                          Restore
+                        </Button>
                       </div>
                     </div>
-                    <div className="flex items-center gap-3">
-                      <Badge
-                        variant={backup.status === 'completed' ? 'default' : 'secondary'}
-                        className={
-                          backup.status === 'completed'
-                            ? 'bg-success/10 text-success border-0'
-                            : backup.status === 'in_progress'
-                            ? 'bg-warning/10 text-warning border-0'
-                            : 'bg-destructive/10 text-destructive border-0'
-                        }
-                      >
-                        {backup.status}
-                      </Badge>
-                      <span className="text-xs text-muted-foreground">{backup.size}</span>
-                      <Button size="sm" variant="outline" className="text-xs gap-1">
-                        <Download className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button size="sm" variant="outline" className="text-xs gap-1">
-                        Restore
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="flex items-center justify-center py-8 text-muted-foreground text-sm">
+                  No backups yet.
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -382,35 +440,38 @@ export default function ServerPage() {
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-base">Schedules</CardTitle>
-                <Button size="sm" className="gap-1.5">
-                  <Plus className="h-3.5 w-3.5" /> New Schedule
-                </Button>
               </div>
             </CardHeader>
             <CardContent>
-              <div className="space-y-2">
-                {schedules.map((schedule) => (
-                  <div key={schedule.id} className="flex items-center justify-between rounded-lg border border-border/50 p-4">
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <p className="text-sm font-medium">{schedule.name}</p>
-                        <Badge variant="outline" className="text-[10px] font-mono">{schedule.cron}</Badge>
-                        {!schedule.isActive && (
-                          <Badge variant="secondary" className="text-[10px]">Inactive</Badge>
-                        )}
+              {schedules.length > 0 ? (
+                <div className="space-y-2">
+                  {schedules.map((schedule) => (
+                    <div key={schedule.id} className="flex items-center justify-between rounded-lg border border-border/50 p-4">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-medium">{schedule.name}</p>
+                          <Badge variant="outline" className="text-[10px] font-mono">{schedule.cron}</Badge>
+                          {!schedule.isActive && (
+                            <Badge variant="secondary" className="text-[10px]">Inactive</Badge>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                          <span>Last run: {typeof schedule.lastRun === 'string' && !schedule.lastRun.includes('—') ? new Date(schedule.lastRun).toLocaleString() : schedule.lastRun}</span>
+                          <span>Next run: {typeof schedule.nextRun === 'string' && !schedule.nextRun.includes('—') ? new Date(schedule.nextRun).toLocaleString() : schedule.nextRun}</span>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                        <span>Last run: {schedule.lastRun}</span>
-                        <span>Next run: {schedule.nextRun}</span>
+                      <div className="flex gap-2">
+                        <Button size="sm" variant="outline" className="text-xs">Edit</Button>
+                        <Button size="sm" variant="outline" className="text-xs">Run Now</Button>
                       </div>
                     </div>
-                    <div className="flex gap-2">
-                      <Button size="sm" variant="outline" className="text-xs">Edit</Button>
-                      <Button size="sm" variant="outline" className="text-xs">Run Now</Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="flex items-center justify-center py-8 text-muted-foreground text-sm">
+                  No schedules configured.
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -430,26 +491,13 @@ export default function ServerPage() {
                   <span>Default</span>
                   <span>Actions</span>
                 </div>
-                {[
-                  { ip: server.ip, port: server.port, isDefault: true },
-                  { ip: server.ip, port: server.port + 1, isDefault: false },
-                  { ip: server.ip, port: server.port + 2, isDefault: false },
-                ].map((alloc, i) => (
-                  <div key={i} className="grid grid-cols-[1fr_100px_80px_80px] gap-4 items-center px-4 py-3 border-t border-border/50 text-sm">
-                    <span className="font-mono text-xs">{alloc.ip}</span>
-                    <span className="font-mono text-xs">{alloc.port}</span>
-                    {alloc.isDefault ? (
-                      <Badge className="text-[10px] bg-primary/10 text-primary border-0">Primary</Badge>
-                    ) : (
-                      <Button size="sm" variant="outline" className="text-xs h-6">Make Primary</Button>
-                    )}
-                    <Button size="sm" variant="outline" className="text-xs text-destructive hover:bg-destructive/10 h-6">Delete</Button>
-                  </div>
-                ))}
+                <div className="grid grid-cols-[1fr_100px_80px_80px] gap-4 items-center px-4 py-3 border-t border-border/50 text-sm">
+                  <span className="font-mono text-xs">{server.ip || 'Not assigned'}</span>
+                  <span className="font-mono text-xs">{server.port}</span>
+                  <Badge className="text-[10px] bg-primary/10 text-primary border-0">Primary</Badge>
+                  <span className="text-xs text-muted-foreground">—</span>
+                </div>
               </div>
-              <Button variant="outline" className="mt-3 gap-1.5 text-xs">
-                <Plus className="h-3.5 w-3.5" /> Add Allocation
-              </Button>
             </CardContent>
           </Card>
         </TabsContent>
@@ -460,12 +508,9 @@ export default function ServerPage() {
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <div>
-                  <CardTitle className="text-base">Subusers</CardTitle>
-                  <CardDescription>Manage who can access this server.</CardDescription>
+                  <CardTitle className="text-base">Server Owner</CardTitle>
+                  <CardDescription>Server ownership information.</CardDescription>
                 </div>
-                <Button size="sm" className="gap-1.5">
-                  <Plus className="h-3.5 w-3.5" /> Add Subuser
-                </Button>
               </div>
             </CardHeader>
             <CardContent>
@@ -473,32 +518,14 @@ export default function ServerPage() {
                 <div className="flex items-center justify-between rounded-lg border border-border/50 p-4">
                   <div className="flex items-center gap-3">
                     <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground text-xs font-bold">
-                      AU
+                      {(server.node || 'S').charAt(0).toUpperCase()}
                     </div>
                     <div>
-                      <p className="text-sm font-medium">Admin User <Badge variant="outline" className="text-[10px] ml-1">Owner</Badge></p>
-                      <p className="text-xs text-muted-foreground">admin@example.com</p>
+                      <p className="text-sm font-medium">Server Owner <Badge variant="outline" className="text-[10px] ml-1">Owner</Badge></p>
+                      <p className="text-xs text-muted-foreground">You</p>
                     </div>
                   </div>
                   <Badge variant="default" className="bg-success/10 text-success border-0">Full Access</Badge>
-                </div>
-                <div className="flex items-center justify-between rounded-lg border border-border/50 p-4">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-chart-2 text-white text-xs font-bold">
-                      MO
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium">Moderator One</p>
-                      <p className="text-xs text-muted-foreground">mod@example.com</p>
-                    </div>
-                  </div>
-                  <div className="flex gap-2">
-                    <Badge variant="outline">Console, Files</Badge>
-                    <Button size="sm" variant="outline" className="text-xs">Edit</Button>
-                    <Button size="sm" variant="outline" className="text-xs text-destructive hover:bg-destructive/10">
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
                 </div>
               </div>
             </CardContent>

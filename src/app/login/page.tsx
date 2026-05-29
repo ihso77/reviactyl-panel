@@ -2,8 +2,8 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { signIn } from 'next-auth/react';
 import Link from 'next/link';
-import { useAuthStore } from '@/lib/store';
 import { AuthLayout } from '@/components/panel/auth-layout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -15,38 +15,41 @@ import { toast } from 'sonner';
 import { motion } from 'framer-motion';
 
 export default function LoginPage() {
-  const [email, setEmail] = useState('admin@example.com');
-  const [password, setPassword] = useState('password');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [remember, setRemember] = useState(false);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
-  const { login } = useAuthStore();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!email || !password) {
+      toast.error('Please enter email and password');
+      return;
+    }
+
     setLoading(true);
 
-    // Simulate login
-    await new Promise((r) => setTimeout(r, 800));
-
-    if (email && password) {
-      login({
-        id: 'usr-001',
+    try {
+      const result = await signIn('credentials', {
         email,
-        username: email.split('@')[0],
-        name: 'Admin User',
-        isAdmin: email.includes('admin'),
-        createdAt: '2024-01-01',
-        language: 'en',
-        twoFactorEnabled: false,
+        password,
+        redirect: false,
       });
-      toast.success('Logged in successfully');
-      router.push('/dashboard');
-    } else {
-      toast.error('Invalid credentials');
+
+      if (result?.error) {
+        toast.error('Invalid email or password');
+      } else {
+        toast.success('Logged in successfully');
+        router.push('/dashboard');
+      }
+    } catch {
+      toast.error('An error occurred during login');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   return (
@@ -74,6 +77,7 @@ export default function LoginPage() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="h-11"
+                  required
                 />
               </div>
               <div className="space-y-2">
@@ -94,6 +98,7 @@ export default function LoginPage() {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     className="h-11 pr-10"
+                    required
                   />
                   <button
                     type="button"

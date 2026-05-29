@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { servers } from '@/lib/mock-data';
+import type { Server } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
@@ -30,14 +30,26 @@ const item = {
 };
 
 export default function ServersPage() {
+  const [servers, setServers] = useState<Server[]>([]);
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<'all' | 'online' | 'offline'>('all');
+  const [loading, setLoading] = useState(true);
 
-  const categories = [...new Set(servers.map((s) => s.category))];
+  useEffect(() => {
+    fetch('/api/servers')
+      .then(r => r.ok ? r.json() : [])
+      .then(data => {
+        setServers(data);
+        setLoading(false);
+      })
+      .catch(() => setLoading(false));
+  }, []);
+
+  const categories = [...new Set(servers.map((s) => s.category).filter(Boolean)) as string[]];
 
   const filtered = servers.filter((s) => {
     const matchesSearch = s.name.toLowerCase().includes(search.toLowerCase()) ||
-      s.description.toLowerCase().includes(search.toLowerCase());
+      (s.description || '').toLowerCase().includes(search.toLowerCase());
     const matchesFilter = filter === 'all' || s.status === filter;
     return matchesSearch && matchesFilter;
   });
@@ -84,81 +96,87 @@ export default function ServersPage() {
         ))}
       </motion.div>
 
-      {/* Server List by Category */}
-      {categories.map((category) => {
-        const categoryServers = filtered.filter((s) => s.category === category);
-        if (categoryServers.length === 0) return null;
+      {loading ? (
+        <div className="flex items-center justify-center py-12">
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+        </div>
+      ) : filtered.length > 0 ? (
+        /* Server List by Category */
+        categories.map((category) => {
+          const categoryServers = filtered.filter((s) => s.category === category);
+          if (categoryServers.length === 0) return null;
 
-        return (
-          <motion.div key={category} variants={item} className="space-y-3">
-            <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
-              {category}
-            </h2>
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-              {categoryServers.map((server) => (
-                <Link key={server.id} href={`/server/${server.id}`}>
-                  <Card className="border-border/50 transition-all duration-200 hover:border-primary/30 hover:shadow-lg hover:shadow-primary/5 group cursor-pointer h-full">
-                    <CardHeader className="pb-2">
-                      <div className="flex items-start justify-between">
-                        <div className="flex items-center gap-2">
-                          <Badge
-                            variant={server.status === 'online' ? 'default' : 'secondary'}
-                            className={
-                              server.status === 'online'
-                                ? 'bg-success/10 text-success hover:bg-success/15 border-0'
-                                : 'bg-destructive/10 text-destructive hover:bg-destructive/15 border-0'
-                            }
-                          >
-                            <Circle className="mr-1 h-1.5 w-1.5 fill-current" />
-                            {server.status}
-                          </Badge>
-                          <Badge variant="outline" className="text-[10px] font-normal">{server.egg}</Badge>
+          return (
+            <motion.div key={category} variants={item} className="space-y-3">
+              <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+                {category}
+              </h2>
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                {categoryServers.map((server) => (
+                  <Link key={server.id} href={`/server/${server.id}`}>
+                    <Card className="border-border/50 transition-all duration-200 hover:border-primary/30 hover:shadow-lg hover:shadow-primary/5 group cursor-pointer h-full">
+                      <CardHeader className="pb-2">
+                        <div className="flex items-start justify-between">
+                          <div className="flex items-center gap-2">
+                            <Badge
+                              variant={server.status === 'online' ? 'default' : 'secondary'}
+                              className={
+                                server.status === 'online'
+                                  ? 'bg-success/10 text-success hover:bg-success/15 border-0'
+                                  : 'bg-destructive/10 text-destructive hover:bg-destructive/15 border-0'
+                              }
+                            >
+                              <Circle className="mr-1 h-1.5 w-1.5 fill-current" />
+                              {server.status}
+                            </Badge>
+                            {server.egg && (
+                              <Badge variant="outline" className="text-[10px] font-normal">{server.egg}</Badge>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                      <CardTitle className="text-sm font-semibold mt-2">{server.name}</CardTitle>
-                    </CardHeader>
-                    <CardContent className="pt-0 space-y-3">
-                      <p className="text-xs text-muted-foreground line-clamp-1">{server.description}</p>
-                      <div className="grid grid-cols-2 gap-2">
-                        <div className="flex items-center gap-1.5 text-xs">
-                          <Cpu className="h-3 w-3 text-muted-foreground" />
-                          <span className="text-muted-foreground">CPU:</span>
-                          <span className="font-medium">{server.cpu}%</span>
+                        <CardTitle className="text-sm font-semibold mt-2">{server.name}</CardTitle>
+                      </CardHeader>
+                      <CardContent className="pt-0 space-y-3">
+                        <p className="text-xs text-muted-foreground line-clamp-1">{server.description || 'No description'}</p>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div className="flex items-center gap-1.5 text-xs">
+                            <Cpu className="h-3 w-3 text-muted-foreground" />
+                            <span className="text-muted-foreground">CPU:</span>
+                            <span className="font-medium">{server.cpu}%</span>
+                          </div>
+                          <div className="flex items-center gap-1.5 text-xs">
+                            <MemoryStick className="h-3 w-3 text-muted-foreground" />
+                            <span className="text-muted-foreground">RAM:</span>
+                            <span className="font-medium">{(server.memory / 1024).toFixed(1)} GB</span>
+                          </div>
+                          <div className="flex items-center gap-1.5 text-xs">
+                            <Users className="h-3 w-3 text-muted-foreground" />
+                            <span className="text-muted-foreground">Players:</span>
+                            <span className="font-medium">{server.players}/{server.maxPlayers}</span>
+                          </div>
+                          <div className="flex items-center gap-1.5 text-xs">
+                            <HardDrive className="h-3 w-3 text-muted-foreground" />
+                            <span className="text-muted-foreground">Disk:</span>
+                            <span className="font-medium">{(server.disk / 1024).toFixed(1)} GB</span>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-1.5 text-xs">
-                          <MemoryStick className="h-3 w-3 text-muted-foreground" />
-                          <span className="text-muted-foreground">RAM:</span>
-                          <span className="font-medium">{(server.memory / 1024).toFixed(1)} GB</span>
-                        </div>
-                        <div className="flex items-center gap-1.5 text-xs">
-                          <Users className="h-3 w-3 text-muted-foreground" />
-                          <span className="text-muted-foreground">Players:</span>
-                          <span className="font-medium">{server.players}/{server.maxPlayers}</span>
-                        </div>
-                        <div className="flex items-center gap-1.5 text-xs">
-                          <HardDrive className="h-3 w-3 text-muted-foreground" />
-                          <span className="text-muted-foreground">Disk:</span>
-                          <span className="font-medium">{(server.disk / 1024).toFixed(1)} GB</span>
-                        </div>
-                      </div>
-                      {server.status === 'online' && (
-                        <div className="space-y-1">
-                          <Progress value={(server.memory / server.memoryLimit) * 100} className="h-1" />
-                          <p className="text-[10px] text-muted-foreground text-right">
-                            {(server.memory / 1024).toFixed(1)} / {(server.memoryLimit / 1024).toFixed(0)} GB
-                          </p>
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
-                </Link>
-              ))}
-            </div>
-          </motion.div>
-        );
-      })}
-
-      {filtered.length === 0 && (
+                        {server.status === 'online' && (
+                          <div className="space-y-1">
+                            <Progress value={server.memoryLimit > 0 ? (server.memory / server.memoryLimit) * 100 : 0} className="h-1" />
+                            <p className="text-[10px] text-muted-foreground text-right">
+                              {(server.memory / 1024).toFixed(1)} / {(server.memoryLimit / 1024).toFixed(0)} GB
+                            </p>
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  </Link>
+                ))}
+              </div>
+            </motion.div>
+          );
+        })
+      ) : (
         <div className="flex flex-col items-center justify-center py-12 text-center">
           <ServerIcon className="h-12 w-12 text-muted-foreground/30 mb-4" />
           <h3 className="text-lg font-medium">No servers found</h3>

@@ -4,29 +4,22 @@ import type { User } from './types';
 interface AuthState {
   user: User | null;
   isAuthenticated: boolean;
-  login: (user: User) => void;
+  loading: boolean;
+  setUser: (user: User | null) => void;
   logout: () => void;
   updateUser: (data: Partial<User>) => void;
+  setLoading: (loading: boolean) => void;
 }
 
-const defaultUser: User = {
-  id: 'usr-001',
-  email: 'admin@example.com',
-  username: 'admin',
-  name: 'Admin User',
-  isAdmin: true,
-  createdAt: '2024-01-01',
-  language: 'en',
-  twoFactorEnabled: false,
-};
-
 export const useAuthStore = create<AuthState>((set) => ({
-  user: defaultUser,
-  isAuthenticated: true,
-  login: (user: User) => set({ user, isAuthenticated: true }),
-  logout: () => set({ user: null, isAuthenticated: false }),
-  updateUser: (data: Partial<User>) =>
+  user: null,
+  isAuthenticated: false,
+  loading: true,
+  setUser: (user) => set({ user, isAuthenticated: !!user, loading: false }),
+  logout: () => set({ user: null, isAuthenticated: false, loading: false }),
+  updateUser: (data) =>
     set((state) => ({
       user: state.user ? { ...state.user, ...data } : null,
     })),
+  setLoading: (loading) => set({ loading }),
 }));
